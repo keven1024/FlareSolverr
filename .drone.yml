@@ -1,0 +1,11 @@
+kind: pipeline
+name: Build
+steps:
+- name: docker  
+  image: plugins/docker
+  settings:
+    username: fudaoyuanicu
+    repo: fudaoyuanicu/flaresolverr_screenshot
+    password:
+      from_secret: docker_password
+    dockerfile: Dockerfile
