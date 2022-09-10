@@ -1,9 +1,10 @@
-import {Page, HTTPResponse} from 'puppeteer'
+import {Page, HTTPResponse, ScreenshotOptions} from 'puppeteer'
+
 const Timeout = require('await-timeout');
 
 import log from './log'
 import {SessionCreateOptions, SessionsCacheItem} from "./sessions";
-import {V1Request} from "../controllers/v1";
+import {screenshotOption, V1Request} from "../controllers/v1";
 import cloudflareProvider from '../providers/cloudflare';
 
 const sessions = require('./sessions')
@@ -13,6 +14,7 @@ export interface ChallengeResolutionResultT {
     status: number,
     headers?: Record<string, string>,
     response: string,
+    screenshot: string,
     cookies: object[]
     userAgent: string
 }
@@ -42,6 +44,7 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
         let message = ''
 
         const page: Page = await session.browser.newPage()
+
 
         // the Puppeter timeout should be half the maxTimeout because we reload the page and wait for challenge
         // the user can set a really high maxTimeout if he wants to
@@ -81,7 +84,6 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
 
         // log html in debug mode
         log.html(await page.content())
-
         // detect protection services and solve challenges
         try {
             response = await cloudflareProvider(params.url, page, response);
@@ -108,6 +110,7 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
                 status: response.status(),
                 headers: response.headers(),
                 response: null,
+                screenshot: null,
                 cookies: await page.cookies(),
                 userAgent: sessions.getUserAgent()
             }
@@ -116,6 +119,55 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
         if (params.returnOnlyCookies) {
             payload.result.headers = null;
             payload.result.userAgent = null;
+        } else if (params.returnScreenshot) {
+            let {
+                resolution,
+                type,
+                quality,
+                fullPage
+            } = params.screenshotOption ?? <screenshotOption>{
+                resolution: '1080p',
+                type: 'png',
+                quality: 100,
+                fullPage: false
+            };
+            resolution = resolution ?? '1080p';
+            type = type ?? 'png';
+            quality = quality ?? 100;
+            fullPage = fullPage ?? false;
+            let height, width: number;
+
+            switch (resolution) {
+                case "720p":
+                    width = 1280;
+                    height = 720;
+                    break;
+                case "2k":
+                    width = 1280;
+                    height = 720;
+                    break;
+                case "1080p":
+                default:
+                    width = 1920;
+                    height = 1080;
+                    break;
+            }
+            const Option: ScreenshotOptions = {
+                encoding: "base64",
+                type: type,
+                quality: type !== 'png' ? quality : undefined,
+                fullPage: fullPage,
+                clip: {
+                    x: 0,
+                    y: 0,
+                    height: height,
+                    width: width
+                }
+            }
+            payload.message = '返回' + resolution + '分辨率, ' + type + '格式的图像';
+            payload.result.headers = null;
+            payload.result.userAgent = null;
+            payload.result.screenshot = <string>await page.screenshot(Option);
         } else {
             payload.result.response = await page.content()
         }
@@ -151,9 +203,19 @@ async function gotoPage(params: V1Request, page: Page, method: string = 'GET'): 
         let pairs = (queryString[0] === '?' ? queryString.substr(1) : queryString).split('&');
         for (let i = 0; i < pairs.length; i++) {
             let pair = pairs[i].split('=');
-            let name; try { name = decodeURIComponent(pair[0]) } catch { name = pair[0] }
+            let name;
+            try {
+                name = decodeURIComponent(pair[0])
+            } catch {
+                name = pair[0]
+            }
             if (name == 'submit') continue;
-            let value; try { value = decodeURIComponent(pair[1] || '') } catch { value = pair[1] || '' }
+            let value;
+            try {
+                value = decodeURIComponent(pair[1] || '')
+            } catch {
+                value = pair[1] || ''
+            }
             postForm += `<input type="text" name="${name}" value="${value}"><br>`;
         }
         postForm += `</form>`;
@@ -170,7 +232,8 @@ async function gotoPage(params: V1Request, page: Page, method: string = 'GET'): 
         await page.waitForTimeout(2000)
         try {
             await page.waitForNavigation({waitUntil: 'domcontentloaded', timeout: 2000})
-        } catch (e) {}
+        } catch (e) {
+        }
 
     }
     return response
@@ -195,7 +258,7 @@ export async function browserRequest(params: V1Request): Promise<ChallengeResolu
     }
 
     try {
-        return  await resolveChallengeWithTimeout(params, session)
+        return await resolveChallengeWithTimeout(params, session)
     } catch (error) {
         throw Error("Unable to process browser request. " + error)
     } finally {
