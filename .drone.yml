@@ -9,3 +9,4 @@ steps:
     password:
       from_secret: docker_password
     dockerfile: Dockerfile
+    auto_tag: true
