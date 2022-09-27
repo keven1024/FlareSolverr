@@ -3,6 +3,7 @@ FROM node:16-alpine3.15
 # Install the web browser (package firefox-esr is available too)
 RUN apk update && \
     apk add --no-cache firefox dumb-init && \
+    apk add wqy-zenhei --no-cache --repository https://nl.alpinelinux.org/alpine/edge/testing && \
     rm -Rf /var/cache
 
 # Copy FlareSolverr code
