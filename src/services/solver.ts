@@ -4,10 +4,30 @@ const Timeout = require('await-timeout');
 
 import log from './log'
 import {SessionCreateOptions, SessionsCacheItem} from "./sessions";
-import {screenshotOption, V1Request} from "../controllers/v1";
+import {screenshotOption, screenshotResolution, V1Request} from "../controllers/v1";
 import cloudflareProvider from '../providers/cloudflare';
 
 const sessions = require('./sessions')
+
+function calcResolution(resolution: screenshotResolution){
+    let height:number,width:number;
+    switch (resolution) {
+        case "720p":
+            width = 1280;
+            height = 720;
+            break;
+        case "2k":
+            width = 1280;
+            height = 720;
+            break;
+        case "1080p":
+        default:
+            width = 1920;
+            height = 1080;
+            break;
+    }
+    return {height, width}
+}
 
 export interface ChallengeResolutionResultT {
     url: string
@@ -44,7 +64,12 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
         let message = ''
 
         const page: Page = await session.browser.newPage()
-
+        // 设置视口
+        if(params.returnScreenshot){
+            const {resolution} = params.screenshotOption;
+            const {width,height} = calcResolution(resolution);
+            await page.setViewport({ width, height })
+        }
 
         // the Puppeter timeout should be half the maxTimeout because we reload the page and wait for challenge
         // the user can set a really high maxTimeout if he wants to
@@ -124,34 +149,22 @@ async function resolveChallenge(params: V1Request, session: SessionsCacheItem): 
                 resolution,
                 type,
                 quality,
+                waitSec,
                 fullPage
             } = params.screenshotOption ?? <screenshotOption>{
                 resolution: '1080p',
                 type: 'png',
                 quality: 100,
+                waitSec:15,
                 fullPage: false
             };
             resolution = resolution ?? '1080p';
             type = type ?? 'png';
             quality = quality ?? 100;
+            waitSec = waitSec ?? 15;
             fullPage = fullPage ?? false;
-            let height, width: number;
-
-            switch (resolution) {
-                case "720p":
-                    width = 1280;
-                    height = 720;
-                    break;
-                case "2k":
-                    width = 1280;
-                    height = 720;
-                    break;
-                case "1080p":
-                default:
-                    width = 1920;
-                    height = 1080;
-                    break;
-            }
+            const {height,width} = calcResolution(resolution);
+            await page.waitForTimeout(waitSec * 1000)
             const Option: ScreenshotOptions = {
                 encoding: "base64",
                 type: type,

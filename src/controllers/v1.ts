@@ -45,8 +45,9 @@ export interface V1Request extends V1RequestBase {
 export interface screenshotOption {
     resolution: screenshotResolution, // 分辨率
     type: screenshotType, // 文件类型
-    quality: number,
-    fullPage: boolean
+    quality: number, // 质量
+    waitSec: number, // 截图前等待的秒数，因为坑爹的firefox不能用 networkidle，而flaresolvarr又钦定firefox
+    fullPage: boolean // 输出整页截图
 }
 
 export type screenshotResolution = '720p' | '1080p' | '2k';
