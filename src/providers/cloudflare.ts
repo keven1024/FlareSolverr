@@ -6,12 +6,17 @@ import log from "../services/log";
  *  This class contains the logic to solve protections provided by CloudFlare
  **/
 
-const BAN_SELECTORS: string[] = [];
+const BAN_SELECTORS: string[] = [
+  'div.main-wrapper div.header.section h1 span.code-label span' // CloudFlare
+];
 const CHALLENGE_SELECTORS: string[] = [
     // todo: deprecate  '#trk_jschal_js', '#cf-please-wait'
     '#cf-challenge-running', '#trk_jschal_js', '#cf-please-wait', // CloudFlare
     '#link-ddg', // DDoS-GUARD
     'td.info #js_info' // Custom CloudFlare for EbookParadijs, Film-Paleis, MuziekFabriek and Puur-Hollands
+];
+const CHALLENGE_TITLES: string[] = [
+    'DDOS-GUARD'
 ];
 const CAPTCHA_SELECTORS: string[] = [
     // todo: deprecate 'input[name="cf_captcha_kind"]'
@@ -47,7 +52,7 @@ export default async function resolveChallenge(url: string, page: Page, response
 
   // find Cloudflare selectors
   let selectorFound = false;
-  let selector: string = await findAnySelector(page, CHALLENGE_SELECTORS)
+  let selector: string = await findChallenge(page)
   if (selector) {
     selectorFound = true;
     log.debug(`Javascript challenge element '${selector}' detected.`)
@@ -56,7 +61,7 @@ export default async function resolveChallenge(url: string, page: Page, response
     while (true) {
       try {
 
-        selector = await findAnySelector(page, CHALLENGE_SELECTORS)
+        selector = await findChallenge(page)
         if (!selector) {
           // solved!
           log.debug('Challenge element not found')
@@ -69,32 +74,6 @@ export default async function resolveChallenge(url: string, page: Page, response
           if (await findAnySelector(page, CAPTCHA_SELECTORS)) {
             // captcha detected
             break
-          }
-
-          // new Cloudflare Challenge #cf-please-wait
-          const displayStyle = await page.evaluate((selector) => {
-            return getComputedStyle(document.querySelector(selector)).getPropertyValue("display");
-          }, selector);
-          if (displayStyle == "none") {
-            // spinner is hidden, could be a captcha or not
-            log.debug('Challenge element is hidden')
-            // wait until redirecting disappears
-            while (true) {
-              try {
-                await page.waitForTimeout(1000)
-                const displayStyle2 = await page.evaluate(() => {
-                  return getComputedStyle(document.querySelector('#cf-spinner-redirecting')).getPropertyValue("display");
-                });
-                if (displayStyle2 == "none") {
-                  break // hCaptcha detected
-                }
-              } catch (error) {
-                break // redirection completed
-              }
-            }
-            break
-          } else {
-            log.debug('Challenge element is visible')
           }
         }
         log.debug('Found challenge element again')
@@ -146,6 +125,20 @@ export default async function resolveChallenge(url: string, page: Page, response
   }
 
   return response;
+}
+
+async function findChallenge(page: Page): Promise<string|null> {
+  const selector = await findAnySelector(page, CHALLENGE_SELECTORS);
+
+  if (selector == null) {
+    const title = await page.title();
+
+    if (CHALLENGE_TITLES.includes(title)) {
+      return `:title[${title}]`;
+    }
+  }
+
+  return selector;
 }
 
 async function findAnySelector(page: Page, selectors: string[]) {
