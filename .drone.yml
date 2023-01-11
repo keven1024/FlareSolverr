@@ -1,3 +1,7 @@
+trigger: 
+  ref: 
+    include: 
+    - refs/tags/*-screenshot
 kind: pipeline
 name: Build
 steps:
@@ -9,4 +13,6 @@ steps:
     password:
       from_secret: docker_password
     dockerfile: Dockerfile
-    auto_tag: true
+    tags:
+      - ${DRONE_COMMIT_BRANCH}
+      - latest
